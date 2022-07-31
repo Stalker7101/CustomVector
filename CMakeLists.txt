@@ -1,11 +1,16 @@
-cmake_minimum_required(VERSION 3.0)
-project(Vector VERSION 1.0.0 LANGUAGES CXX)
+cmake_minimum_required(VERSION 3.10.0)
+project(CustomVector VERSION 1.0 LANGUAGES CXX)
 
-file(GLOB CPPS "*.?pp ")
+set(SOURCES ${CMAKE_SOURCE_DIR}/src)
+set(HEADERS ${CMAKE_SOURCE_DIR}/hdr)
 
-include_directories(headers)
+file(GLOB CPPS "${SOURCES}/*.cpp")
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_BUILD_TYPE Debug)
 
 add_executable(${PROJECT_NAME} ${CPPS})
+
+target_include_directories(${PROJECT_NAME} PRIVATE
+    ${HEADERS}
+)

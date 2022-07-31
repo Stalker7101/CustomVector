@@ -63,6 +63,8 @@ namespace custom
 
         void destroy(T* ptr) const;
     };    
+    // FixedAllocator
+    // PoolAllocator
 
     ////////////////////////////////////////////////////////////////////////////////////////
     template <typename T, typename Alloc = StandartAllocator<T>>
@@ -143,9 +145,9 @@ namespace custom
         Vector(const Vector<T, Alloc>& vec);
         Vector(Vector<T, Alloc>&& vec); //
 
-        Vector<T, Alloc>& operator = (const Vector<T, Alloc>& vec); //
+        Vector<T, Alloc>& operator = (const Vector<T, Alloc>& vec);
         Vector<T, Alloc>& operator = (Vector<T, Alloc>&& vec); //
-        void safe_assign(const Vector<T, Alloc>& vec); //
+        void safe_assign(const Vector<T, Alloc>& vec);
 
         std::size_t size() const;
         std::size_t capacity() const;
@@ -153,10 +155,11 @@ namespace custom
 
         void resize(std::size_t n, T value = T());
         void reserve(std::size_t n);
-        void shrink_to_fit(); //
-        void clear(); //
+        void shrink_to_fit();
+        void clear();
 
-        void push_back(T value = T());
+        void push_back(const T& value);
+        void push_back(T&& value = T());
         iterator insert(const_iterator pos, const T& value); //
         iterator insert(const_iterator pos, T&& value); //
 
@@ -442,7 +445,7 @@ namespace custom
         : VectorBase<T, Alloc>(alloc, n)
     {
         std::uninitialized_fill(m_start, m_spaceEnd, value);
-        m_end = m_start + n;
+        m_end = m_spaceEnd;
     }
 
     // ---------------------------------------------------------------------------------- //
@@ -453,31 +456,6 @@ namespace custom
         std::uninitialized_copy(vec.m_start, vec.m_end, m_start);
         m_end = m_start + vec.size();
     }
-
-        //T* newarr = AllocTraits::allocate(m_alloc, vec.m_capacity);
-        //
-        //std::size_t i = 0;
-        //try
-        //{
-        //    for (; i < vec.m_size; ++i)
-        //        AllocTraits::construct(m_alloc, newarr + i, vec.m_arr[i]);
-        //}
-        //catch (...)
-        //{
-        //    for (std::size_t k = 0; k < i; ++k)
-        //        AllocTraits::destroy(m_alloc, newarr + k);
-        //    AllocTraits::deallocate(m_alloc, newarr, vec.m_capacity);
-        //    throw;
-        //}
-
-        //for (std::size_t k = 0; k < m_size; ++k)
-        //    AllocTraits::destroy(m_alloc, m_arr + k);
-        //AllocTraits::deallocate(m_alloc, m_arr, m_size);
-
-        //m_arr = newarr;
-        //m_capacity = vec.m_capacity;
-        //m_size = vec.m_size;
-    //}
 
     // ---------------------------------------------------------------------------------- //
     template <typename T, typename Alloc>
@@ -581,56 +559,53 @@ namespace custom
     {
         if (n <= capacity()) return;
 
-        VectorBase<T, Alloc> temp(m_alloc, size() ? size() * 2 : 2);
-
+        VectorBase<T, Alloc> temp(m_alloc, n);
         std::uninitialized_copy(m_start, m_end, temp.m_start);
         temp.m_end = temp.m_start + size();
-        destroy_elements();
+
+        destroy_elements(); // can delete call becouse there already is in temp destructor
         swap<VectorBase<T, Alloc>>(temp, *this);
     }
-        
-        //T* newarr = AllocTraits::allocate(m_alloc, n);
-
-        //std::size_t i = 0;
-        //try
-        //{
-        //    for (; i < m_size; ++i)
-        //        AllocTraits::construct(m_alloc, newarr + i, m_arr[i]);
-        //}
-        //catch(...)
-        //{
-        //    for (std::size_t k = 0; k < i; ++k)
-        //        AllocTraits::destroy(m_alloc, newarr + k);
-        //    AllocTraits::deallocate(m_alloc, newarr, n);
-        //    throw;
-        //}
-
-        //for (std::size_t k = 0; k < m_size; ++k)
-        //    AllocTraits::destroy(m_alloc, m_arr + k);
-        //AllocTraits::deallocate(m_alloc, m_arr, m_size);
-
-        //m_arr = newarr;
-        //m_capacity = n;
-    //}
 
     // ---------------------------------------------------------------------------------- //
     template <typename T, typename Alloc>
-    void Vector<T, Alloc>::push_back(T value)
+    void Vector<T, Alloc>::shrink_to_fit()
     {
-        if (m_end == m_spaceEnd)
-        {
-            VectorBase<T, Alloc> temp(m_alloc, size() ? size() * 2 : 2);
-            std::uninitialized_copy(m_start, m_end, temp.m_start);
-            temp.m_end = temp.m_start + size();
+        T* newStart = AllocTraits::allocate(m_alloc, size());
+        std::uninitialized_copy(m_start, m_end, newStart);
+        
+        destroy_elements();
+        VectorBase<T, Alloc>::free_memory();
 
-            AllocTraits::construct(temp.m_alloc, temp.m_end, value);
-            ++temp.m_end;
+        m_start = newStart;
+        m_end = m_start + size();
+        m_spaceEnd = m_end;
+    }
 
-            destroy_elements();
-            swap<VectorBase<T, Alloc>>(temp, *this);
-        }
+    // ---------------------------------------------------------------------------------- //
+    template <typename T, typename Alloc>
+    void Vector<T, Alloc>::clear()
+    {
+        destroy_elements();
+        VectorBase<T, Alloc>::free_memory();
+        m_start = m_end = m_spaceEnd = nullptr;
+    }
 
-        AllocTraits::construct(m_alloc, m_end,value);
+    // ---------------------------------------------------------------------------------- //
+    template <typename T, typename Alloc>
+    void Vector<T, Alloc>::push_back(const T& value)
+    {
+        if (m_end == m_spaceEnd) reserve(size() ? size() * 2 : 2);
+        AllocTraits::construct(m_alloc, m_end, value);
+        ++m_end;
+    }
+
+    // ---------------------------------------------------------------------------------- //
+    template <typename T, typename Alloc>
+    void Vector<T, Alloc>::push_back(T&& value)
+    {
+        if (m_end == m_spaceEnd) reserve(size() ? size() * 2 : 2);
+        AllocTraits::construct(m_alloc, m_end, std::move(value));
         ++m_end;
     }
 
@@ -638,7 +613,7 @@ namespace custom
     template <typename T, typename Alloc>
     void Vector<T, Alloc>::pop_back()
     {
-        AllocTraits::destroy(m_alloc, m_end);
+        AllocTraits::destroy(m_alloc, m_end - 1);
         --m_end;
     }
 
