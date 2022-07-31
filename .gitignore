@@ -1,0 +1,5 @@
+# ignore build dir
+bld/
+
+# ignore compile commands
+compile_commands.json
